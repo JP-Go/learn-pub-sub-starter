@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -15,9 +17,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	rabbitChan, err := conn.Channel()
+	rabbitChan, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		fmt.Sprintf("%s.*", routing.GameLogSlug),
+		pubsub.QueueTypeDurable)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Could not connect to game logs queue. Exiting. Error: %s", err)
 	}
 	defer conn.Close()
 	fmt.Println("Successfully connected to rabbitmq broker.")
@@ -47,6 +52,7 @@ func main() {
 				})
 		case "quit":
 			fmt.Println("Quitting game. Goodbye")
+			os.Exit(0)
 			break
 		default:
 			fmt.Println("Could not understand command '" + input[0] + "'")
