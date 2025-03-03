@@ -17,10 +17,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	rabbitChan, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic,
+	rabbitChan, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
 		fmt.Sprintf("%s.*", routing.GameLogSlug),
-		pubsub.QueueTypeDurable)
+		pubsub.QueueTypeDurable,
+	)
 	if err != nil {
 		log.Fatalf("Could not connect to game logs queue. Exiting. Error: %s", err)
 	}
@@ -50,6 +53,9 @@ func main() {
 				routing.PlayingState{
 					IsPaused: false,
 				})
+		case "help":
+			gamelogic.PrintServerHelp()
+			break
 		case "quit":
 			fmt.Println("Quitting game. Goodbye")
 			os.Exit(0)
