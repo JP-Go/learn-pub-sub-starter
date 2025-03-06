@@ -13,7 +13,17 @@ import (
 
 func StartGame(conn *amqp.Connection, username string) {
 	gameState := gamelogic.NewGameState(username)
-	err := pubsub.SubscribeJSON(
+	_, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+username,
+		routing.PauseKey,
+		pubsub.QueueTypeTransient,
+	)
+	if err != nil {
+		log.Fatalf("Could not start game due to %v", err)
+	}
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username,
@@ -24,10 +34,29 @@ func StartGame(conn *amqp.Connection, username string) {
 	if err != nil {
 		log.Fatalf("Could not start game due to %v", err)
 	}
-	runREPL(gameState)
+	movesChan, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		string(routing.ArmyMovesPrefix)+"."+username,
+		string(routing.ArmyMovesPrefix)+"."+"*",
+		pubsub.QueueTypeTransient,
+	)
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+username,
+		routing.ArmyMovesPrefix,
+		pubsub.QueueTypeTransient,
+		handlerMove(gameState),
+	)
+	if err != nil {
+		log.Fatalf("Could not start game due to %v", err)
+	}
+
+	runREPLForUser(username, gameState, movesChan)
 }
 
-func runREPL(gameState *gamelogic.GameState) {
+func runREPLForUser(username string, gameState *gamelogic.GameState, movesChan *amqp.Channel) {
 	for {
 		input := gamelogic.GetInput()
 		if len(input) < 1 {
@@ -44,9 +73,20 @@ func runREPL(gameState *gamelogic.GameState) {
 			move, err := gameState.CommandMove(input)
 			if err != nil {
 				fmt.Printf("ERROR: %s\n", err)
-			} else {
-				fmt.Printf("Player %s moved troops to %s\n", move.Player.Username, move.ToLocation)
+				break
 			}
+			fmt.Printf(
+				"Player %s moved troops to %s\n",
+				username,
+				move.ToLocation,
+			)
+			pubsub.PublishJSON(
+				movesChan,
+				routing.ExchangePerilTopic,
+				routing.ArmyMovesPrefix+"."+username,
+				move,
+			)
+			fmt.Printf("Published player's %s move\n", username)
 			break
 		case "status":
 			gameState.CommandStatus()
