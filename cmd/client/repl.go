@@ -28,7 +28,7 @@ func StartGame(conn *amqp.Connection, username string) {
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
-		string(routing.ArmyMovesPrefix)+"."+username,
+		string(routing.ArmyMovesPrefix)+"."+gameState.GetUsername(),
 		string(routing.ArmyMovesPrefix)+"."+"*",
 		pubsub.QueueTypeDurable,
 		handlerMove(gameState, pubChan),
@@ -41,19 +41,19 @@ func StartGame(conn *amqp.Connection, username string) {
 		conn,
 		routing.ExchangePerilTopic,
 		string(routing.WarRecognitionsPrefix),
-		string(routing.WarRecognitionsPrefix)+"."+username,
+		string(routing.WarRecognitionsPrefix)+".*",
 		pubsub.QueueTypeDurable,
-		handlerWar(gameState),
+		handlerWar(gameState, pubChan),
 	)
 
 	if err != nil {
 		log.Fatalf("Could not connect to publish channel due to %v", err)
 	}
 
-	runREPLForUser(username, gameState, pubChan)
+	runREPLForUser(gameState, pubChan)
 }
 
-func runREPLForUser(username string, gameState *gamelogic.GameState, publishChan *amqp.Channel) {
+func runREPLForUser(gameState *gamelogic.GameState, publishChan *amqp.Channel) {
 	for {
 		input := gamelogic.GetInput()
 		if len(input) < 1 {
@@ -72,18 +72,12 @@ func runREPLForUser(username string, gameState *gamelogic.GameState, publishChan
 				fmt.Printf("ERROR: %s\n", err)
 				break
 			}
-			fmt.Printf(
-				"Player %s moved troops to %s\n",
-				username,
-				move.ToLocation,
-			)
 			pubsub.PublishJSON(
 				publishChan,
 				routing.ExchangePerilTopic,
-				routing.ArmyMovesPrefix+"."+username,
+				routing.ArmyMovesPrefix+"."+move.Player.Username,
 				move,
 			)
-			fmt.Printf("Published player's %s move\n", username)
 			break
 		case "status":
 			gameState.CommandStatus()
