@@ -60,6 +60,19 @@ func subscribe[T any](
 	return nil
 }
 
+func jsonDecoder[T any](data []byte) (T, error) {
+	var message T
+	err := json.Unmarshal(data, &message)
+	return message, err
+}
+
+func gobDecoder[T any](data []byte) (T, error) {
+	dec := gob.NewDecoder(bytes.NewBuffer(data))
+	var message T
+	err := dec.Decode(&message)
+	return message, err
+}
+
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
 	exchange,
@@ -68,12 +81,7 @@ func SubscribeJSON[T any](
 	simpleQueueType SimpleQueueType,
 	handler func(T) Acktype,
 ) error {
-	unmarshaler := func(data []byte) (T, error) {
-		var message T
-		err := json.Unmarshal(data, &message)
-		return message, err
-	}
-	return subscribe(conn, exchange, queueName, key, simpleQueueType, handler, unmarshaler)
+	return subscribe(conn, exchange, queueName, key, simpleQueueType, handler, jsonDecoder)
 }
 
 func SubscribeGob[T any](
@@ -84,11 +92,5 @@ func SubscribeGob[T any](
 	simpleQueueType SimpleQueueType,
 	handler func(T) Acktype,
 ) error {
-	unmarshaler := func(data []byte) (T, error) {
-		dec := gob.NewDecoder(bytes.NewBuffer(data))
-		var message T
-		err := dec.Decode(&message)
-		return message, err
-	}
-	return subscribe(conn, exchange, queueName, key, simpleQueueType, handler, unmarshaler)
+	return subscribe(conn, exchange, queueName, key, simpleQueueType, handler, gobDecoder)
 }

@@ -18,18 +18,11 @@ func gobEncoder[T any](data T) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(data)
-	if err != nil {
-		return []byte{}, err
-	}
-	return buf.Bytes(), nil
+	return buf.Bytes(), err
 }
 
 func jsonEncoder[T any](data T) ([]byte, error) {
-	body, err := json.Marshal(data)
-	if err != nil {
-		return []byte{}, err
-	}
-	return body, nil
+	return json.Marshal(data)
 }
 
 func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
