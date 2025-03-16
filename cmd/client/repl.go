@@ -12,13 +12,14 @@ import (
 )
 
 func StartGame(conn *amqp.Connection, username string) {
-	gameState := gamelogic.NewGameState(username)
-	_, _, err := pubsub.DeclareAndBind(
+	gs := gamelogic.NewGameState(username)
+	err := pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username,
 		routing.PauseKey,
 		pubsub.QueueTypeTransient,
+		handlerPause(gs),
 	)
 	if err != nil {
 		log.Fatalf("Could not start game due to %v", err)
@@ -28,10 +29,10 @@ func StartGame(conn *amqp.Connection, username string) {
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
-		string(routing.ArmyMovesPrefix)+"."+gameState.GetUsername(),
+		string(routing.ArmyMovesPrefix)+"."+gs.GetUsername(),
 		string(routing.ArmyMovesPrefix)+"."+"*",
 		pubsub.QueueTypeDurable,
-		handlerMove(gameState, pubChan),
+		handlerMove(gs, pubChan),
 	)
 
 	if err != nil {
@@ -43,14 +44,14 @@ func StartGame(conn *amqp.Connection, username string) {
 		string(routing.WarRecognitionsPrefix),
 		string(routing.WarRecognitionsPrefix)+".*",
 		pubsub.QueueTypeDurable,
-		handlerWar(gameState, pubChan),
+		handlerWar(gs, pubChan),
 	)
 
 	if err != nil {
 		log.Fatalf("Could not connect to publish channel due to %v", err)
 	}
 
-	runREPLForUser(gameState, pubChan)
+	runREPLForUser(gs, pubChan)
 }
 
 func runREPLForUser(gameState *gamelogic.GameState, publishChan *amqp.Channel) {
