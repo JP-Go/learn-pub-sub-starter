@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -29,6 +30,10 @@ func subscribe[T any](
 	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, simpleQueueType)
 	if err != nil {
 		return err
+	}
+	err = channel.Qos(10, 0, false)
+	if err != nil {
+		fmt.Println("Failed to set prefetch count.")
 	}
 	deliveryChan, err := channel.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
