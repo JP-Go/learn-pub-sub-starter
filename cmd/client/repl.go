@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -58,7 +60,8 @@ func runREPLForUser(gameState *gamelogic.GameState, publishChan *amqp.Channel) {
 	for {
 		input := gamelogic.GetInput()
 		if len(input) < 1 {
-			break
+			fmt.Println("Missing command.")
+			continue
 		}
 		switch input[0] {
 		case "spawn":
@@ -87,7 +90,29 @@ func runREPLForUser(gameState *gamelogic.GameState, publishChan *amqp.Channel) {
 			gamelogic.PrintClientHelp()
 			break
 		case "spam":
-			fmt.Println("Spamming is not allowed yet!")
+			if len(input) < 2 {
+				fmt.Println("Missing argument for the spam command. Usage spam <number of messages>")
+				continue
+			}
+			nOfMessages, err := strconv.Atoi(input[1])
+			if err != nil || nOfMessages < 0 {
+				fmt.Println("Invalid argument for the spam command. Number of messages must be a positive integer")
+				continue
+			}
+			for i := 0; i < nOfMessages; i++ {
+				log := gamelogic.GetMaliciousLog()
+				pubsub.PublishGob(
+					publishChan,
+					routing.ExchangePerilTopic,
+					routing.GameLogSlug+"."+gameState.GetUsername(),
+					routing.GameLog{
+						CurrentTime: time.Now(),
+						Username:    gameState.GetUsername(),
+						Message:     log,
+					},
+				)
+
+			}
 			break
 		case "quit":
 			gamelogic.PrintQuit()
