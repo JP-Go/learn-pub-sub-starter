@@ -14,20 +14,30 @@ import (
 func main() {
 	connString := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(connString)
+	defer conn.Close()
 	if err != nil {
 		panic(err)
 	}
-	rabbitChan, _, err := pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
-		fmt.Sprintf("%s.*", routing.GameLogSlug),
+		routing.GameLogSlug+".*",
 		pubsub.QueueTypeDurable,
+		func(gl routing.GameLog) pubsub.Acktype {
+			defer fmt.Print("> ")
+			err := gamelogic.WriteLog(gl)
+			if err != nil {
+				return pubsub.AcktypeNackRequeue
+			}
+			return pubsub.AcktypeAck
+		},
 	)
+
 	if err != nil {
 		log.Fatalf("Could not connect to game logs queue. Exiting. Error: %s", err)
 	}
-	defer conn.Close()
+	pubChan, err := conn.Channel()
 	fmt.Println("Successfully connected to rabbitmq broker.")
 	gamelogic.PrintServerHelp()
 	for {
@@ -38,7 +48,7 @@ func main() {
 		switch input[0] {
 		case "pause":
 			fmt.Println("Game is paused.")
-			pubsub.PublishJSON(rabbitChan,
+			pubsub.PublishJSON(pubChan,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{
@@ -47,7 +57,7 @@ func main() {
 			break
 		case "resume":
 			fmt.Println("Resuming game.")
-			pubsub.PublishJSON(rabbitChan,
+			pubsub.PublishJSON(pubChan,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{
